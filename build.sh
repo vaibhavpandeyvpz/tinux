@@ -96,7 +96,7 @@ if [[ -d "$INITRAMFS_BUILD" ]]; then
 fi
 mkdir -p "$INITRAMFS_BUILD"
 cd "$INITRAMFS_BUILD"
-mkdir -p etc proc sys
+mkdir -p dev etc/init.d proc sys
 cp -a "$BUSYBOX_BUILD/_install/"* .
 rm linuxrc
 echo "#!/bin/sh
@@ -104,8 +104,12 @@ echo "#!/bin/sh
 dmesg -n 1
 clear
 
+mount -t devtmpfs none /dev
 mount -t proc none /proc
 mount -t sysfs none /sys
+
+mkdir -p /dev/pts
+mount -t devpts none /dev/pts
 
 cat <<!
 
@@ -120,9 +124,9 @@ System startup took \$(cut -d' ' -f1 /proc/uptime) seconds.
 
 Tinux/0.0.1
 
-!
-
-exec /bin/sh" > init
+!" > etc/init.d/rcS
+chmod +x etc/init.d/rcS
+ln -s sbin/init init
 chmod +x init
 find . -print0 | cpio --format=newc --null --owner=root:root -o | gzip -9 > "$WD/build/initramfs.cpio.gz"
 
