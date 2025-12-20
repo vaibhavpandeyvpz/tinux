@@ -6,10 +6,14 @@ on:
   pull_request:
     branches: [master, main]
   workflow_dispatch:
+  release:
+    types: [published]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     strategy:
       matrix:
@@ -44,7 +48,16 @@ jobs:
 
       - name: Create bootable ISO
         run: |
-          ISO_NAME="tinux-kernel-${{ matrix.kernel }}-busybox-${{ matrix.busybox }}.iso"
+          # Determine ISO name based on event type
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TINUX_VERSION="${{ github.event.release.tag_name }}"
+            # Strip 'v' prefix if present
+            TINUX_VERSION="${TINUX_VERSION#v}"
+            ISO_NAME="tinux-${TINUX_VERSION}-kernel-${{ matrix.kernel }}-busybox-${{ matrix.busybox }}.iso"
+          else
+            ISO_NAME="tinux-kernel-${{ matrix.kernel }}-busybox-${{ matrix.busybox }}.iso"
+          fi
+          echo "ISO_NAME=${ISO_NAME}" >> $GITHUB_ENV
 
           # x86_64 builds to arch/x86/boot/bzImage
           if [ -f "build/bzImage" ]; then
@@ -69,7 +82,7 @@ jobs:
           set default=0
 
           menuentry "Tinux (Kernel ${{ matrix.kernel }}, Busybox ${{ matrix.busybox }})" --class gnu-linux {
-            linux /boot/bzImage console=ttyS0 rdinit=/init
+            linux /boot/bzImage console=tty0 rdinit=/init
             initrd /boot/initramfs.cpio.gz
           }
           EOF
@@ -81,5 +94,13 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: tinux-kernel-${{ matrix.kernel }}-busybox-${{ matrix.busybox }}
-          path: tinux-kernel-${{ matrix.kernel }}-busybox-${{ matrix.busybox }}.iso
+          path: ${{ env.ISO_NAME }}
           retention-days: 30
+
+      - name: Upload ISO to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ env.ISO_NAME }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
