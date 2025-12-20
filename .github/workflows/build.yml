@@ -38,12 +38,9 @@ jobs:
             bc
 
       - name: Build Tinux (Kernel ${{ matrix.kernel }}, Busybox ${{ matrix.busybox }})
-        env:
-          ARCH: x86_64
         run: |
           # Run build.sh non-interactively by piping 'n' responses
-          export ARCH=x86_64
-          echo -e "n\nn" | env ARCH="$ARCH" ./build.sh ${{ matrix.kernel }} ${{ matrix.busybox }}
+          echo -e "n\nn" | ./build.sh ${{ matrix.kernel }} ${{ matrix.busybox }}
 
       - name: Create bootable ISO
         run: |
@@ -51,10 +48,8 @@ jobs:
 
           # x86_64 builds to arch/x86/boot/bzImage
           if [ -f "build/bzImage" ]; then
-            KERNEL_IMAGE="bzImage"
             KERNEL_PATH="build/bzImage"
           elif [ -f "build/kernel/arch/x86/boot/bzImage" ]; then
-            KERNEL_IMAGE="bzImage"
             KERNEL_PATH="build/kernel/arch/x86/boot/bzImage"
           else
             echo "Error: Kernel image not found"
@@ -69,6 +64,9 @@ jobs:
           cp "${KERNEL_PATH}" iso/boot/bzImage
           cp build/initramfs.cpio.gz iso/boot/initramfs.cpio.gz
 
+          file iso/boot/bzImage
+          file iso/boot/initramfs.cpio.gz
+
           # Copy isolinux files
           cp /usr/lib/ISOLINUX/isolinux.bin iso/isolinux/
           cp /usr/lib/syslinux/modules/bios/*.c32 iso/isolinux/
@@ -79,53 +77,20 @@ jobs:
           LABEL linux
             KERNEL /boot/bzImage
             INITRD /boot/initramfs.cpio.gz
-            APPEND console=ttyS0 rdinit=/init initcall_debug
+            APPEND console=ttyS0 rdinit=/init
           EOF
 
-          # Verify files are in place
-          echo "Verifying ISO files:"
-          ls -lh iso/boot/
-          ls -lh iso/isolinux/
-          file iso/boot/bzImage
-          file iso/boot/initramfs.cpio.gz
-
-          # Create bootable ISO with isolinux
-          # Find isohdpfx.bin for hybrid MBR (optional, makes ISO bootable from USB too)
-          ISOHDPFX=""
-          for path in /usr/lib/syslinux/isohdpfx.bin /usr/share/syslinux/isohdpfx.bin; do
-            if [ -f "$path" ]; then
-              ISOHDPFX="$path"
-              break
-            fi
-          done
-
-          echo "ISOHDPFX: $ISOHDPFX"
-
-          if [ -n "$ISOHDPFX" ]; then
-            xorriso -as mkisofs \
-              -l -r -J \
-              -V "TINUX" \
-              -b isolinux/isolinux.bin \
-              -isohybrid-mbr "$ISOHDPFX" \
-              -no-emul-boot \
-              -boot-load-size 4 \
-              -boot-info-table \
-              -c isolinux/boot.cat \
-              -o "${ISO_NAME}" \
-              iso/
-          else
-            # Create ISO without hybrid MBR (CD/DVD boot only)
-            xorriso -as mkisofs \
-              -l -r -J \
-              -V "TINUX" \
-              -b isolinux/isolinux.bin \
-              -no-emul-boot \
-              -boot-load-size 4 \
-              -boot-info-table \
-              -c isolinux/boot.cat \
-              -o "${ISO_NAME}" \
-              iso/
-          fi
+          # Create ISO (CD/DVD boot only)
+          xorriso -as mkisofs \
+            -l -r -J \
+            -V "TINUX" \
+            -b isolinux/isolinux.bin \
+            -no-emul-boot \
+            -boot-load-size 4 \
+            -boot-info-table \
+            -c isolinux/boot.cat \
+            -o "${ISO_NAME}" \
+            iso/
 
       - name: Upload ISO artifact
         uses: actions/upload-artifact@v6

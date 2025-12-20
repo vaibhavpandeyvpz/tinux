@@ -86,6 +86,7 @@ mkdir -p "$KERNEL_BUILD"
 cd "$KERNEL_SOURCE"
 make O="$KERNEL_BUILD" defconfig
 cd "$KERNEL_BUILD"
+
 # Ensure initramfs/initrd support is enabled
 CONFIG_CHANGED=0
 if ! grep -q "^CONFIG_BLK_DEV_INITRD=y" .config; then
@@ -99,26 +100,18 @@ if ! grep -q "^CONFIG_RD_GZIP=y" .config; then
         echo "CONFIG_RD_GZIP=y" >> .config
     CONFIG_CHANGED=1
 fi
-read -p "Would you like to customize kernel build config? (yN) " -n 1 -r
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    make menuconfig
-    CONFIG_CHANGED=1
-fi
-# Rebuild kernel if config was changed
+# Rebuild kernel config if config was changed
 if [ $CONFIG_CHANGED -eq 1 ]; then
     echo "Kernel config changed, rebuilding..."
     make olddefconfig
 fi
-grep -E "CONFIG_BLK_DEV_INITRD|CONFIG_INITRAMFS" .config
-make -j$THREADS
-# Copy kernel image (x86_64 builds to arch/x86/boot/bzImage)
-if [ -f "$KERNEL_BUILD/arch/x86/boot/bzImage" ]; then
-    cp "$KERNEL_BUILD/arch/x86/boot/bzImage" "$WD/build/"
-else
-    # Fallback: try to find bzImage
-    cp "$KERNEL_BUILD/arch/"*"/boot/bzImage" "$WD/build/" 2>/dev/null || \
-    abort "Could not find kernel image (bzImage)"
+read -p "Would you like to customize kernel build config? (yN) " -n 1 -r
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    make menuconfig
 fi
+
+make -j$THREADS
+cp "$KERNEL_BUILD/arch/"*"/boot/bzImage" "$WD/build/"
 
 echo Building ramdisk...
 if [[ -d "$INITRAMFS_BUILD" ]]; then
@@ -152,7 +145,7 @@ System startup took \$(cut -d' ' -f1 /proc/uptime) seconds.
   ▀       ▐ █  █ █ █▄ ▄█ █   ▀▄ 
             █   ██  ▀▀▀   ▀     
 
-Tinux/0.0.1
+github.com/vaibhavpandeyvpz/tinux
 
 !" > etc/init.d/rcS
 chmod +x etc/init.d/rcS
