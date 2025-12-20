@@ -31,10 +31,10 @@ jobs:
             libncurses-dev \
             libssl-dev \
             xz-utils \
-            syslinux \
-            syslinux-common \
-            isolinux \
+            grub-pc-bin \
+            grub-efi-amd64-bin \
             xorriso \
+            mtools \
             bc
 
       - name: Build Tinux (Kernel ${{ matrix.kernel }}, Busybox ${{ matrix.busybox }})
@@ -57,37 +57,25 @@ jobs:
           fi
 
           # Create ISO structure
-          mkdir -p iso/boot
-          mkdir -p iso/isolinux
+          mkdir -p iso/boot/grub
 
           # Copy kernel and initramfs
           cp "${KERNEL_PATH}" iso/boot/bzImage
           cp build/initramfs.cpio.gz iso/boot/initramfs.cpio.gz
 
-          # Copy isolinux files
-          cp /usr/lib/ISOLINUX/isolinux.bin iso/isolinux/
-          cp /usr/lib/syslinux/modules/bios/*.c32 iso/isolinux/
+          # Create GRUB configuration
+          cat > iso/boot/grub/grub.cfg <<EOF
+          set timeout=10
+          set default=0
 
-          # Create isolinux configuration
-          cat > iso/isolinux/isolinux.cfg <<EOF
-          DEFAULT linux
-          LABEL linux
-            KERNEL /boot/bzImage
-            INITRD /boot/initramfs.cpio.gz
-            APPEND console=ttyS0 rdinit=/init
+          menuentry "Tinux (Kernel ${{ matrix.kernel }}, Busybox ${{ matrix.busybox }})" --class gnu-linux {
+            linux /boot/bzImage console=ttyS0 rdinit=/init
+            initrd /boot/initramfs.cpio.gz
+          }
           EOF
 
-          # Create ISO (CD/DVD boot only)
-          xorriso -as mkisofs \
-            -l -r -J \
-            -V "TINUX" \
-            -b isolinux/isolinux.bin \
-            -no-emul-boot \
-            -boot-load-size 4 \
-            -boot-info-table \
-            -c isolinux/boot.cat \
-            -o "${ISO_NAME}" \
-            iso/
+          # Create ISO using grub-mkrescue (supports both UEFI and BIOS)
+          grub-mkrescue -o "${ISO_NAME}" iso/
 
       - name: Upload ISO artifact
         uses: actions/upload-artifact@v6
