@@ -93,6 +93,7 @@ if [ $CONFIG_CHANGED -eq 1 ]; then
     echo "Kernel config changed, rebuilding..."
     make olddefconfig
 fi
+grep -E "CONFIG_BLK_DEV_INITRD|CONFIG_INITRAMFS" .config
 make -j$THREADS
 # Copy kernel image (x86_64 builds to arch/x86/boot/bzImage)
 if [ -f "$KERNEL_BUILD/arch/x86/boot/bzImage" ]; then

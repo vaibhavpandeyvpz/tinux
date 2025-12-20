@@ -79,7 +79,7 @@ jobs:
           LABEL linux
             KERNEL /boot/bzImage
             INITRD /boot/initramfs.cpio.gz
-            APPEND console=ttyS0 rdinit=/init
+            APPEND console=ttyS0 rdinit=/init initcall_debug
           EOF
 
           # Verify files are in place
