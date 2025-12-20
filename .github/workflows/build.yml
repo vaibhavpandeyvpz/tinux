@@ -31,6 +31,7 @@ jobs:
             libncurses-dev \
             libssl-dev \
             xz-utils \
+            unzip \
             python3 \
             python3-pip \
             python3-setuptools \
@@ -50,18 +51,19 @@ jobs:
 
       - name: Build U-Boot
         run: |
-          UBOOT_VERSION="2024.01"
-          UBOOT_URL="https://ftp.denx.de/pub/u-boot/u-boot-${UBOOT_VERSION}.tar.bz2"
+          UBOOT_VERSION="v2025.10"
+          UBOOT_URL="https://github.com/u-boot/u-boot/archive/refs/tags/${UBOOT_VERSION}.zip"
           UBOOT_CACHE="$HOME/.cache/tinux"
           mkdir -p "$UBOOT_CACHE"
 
-          if [ ! -f "$UBOOT_CACHE/u-boot-${UBOOT_VERSION}.tar.bz2" ]; then
-            wget -O "$UBOOT_CACHE/u-boot-${UBOOT_VERSION}.tar.bz2" "$UBOOT_URL"
+          if [ ! -f "$UBOOT_CACHE/u-boot-${UBOOT_VERSION}.zip" ]; then
+            wget -O "$UBOOT_CACHE/u-boot-${UBOOT_VERSION}.zip" "$UBOOT_URL"
           fi
 
-          tar -xf "$UBOOT_CACHE/u-boot-${UBOOT_VERSION}.tar.bz2"
-          cd u-boot-${UBOOT_VERSION}
-          make x86_64_defconfig
+          unzip -q "$UBOOT_CACHE/u-boot-${UBOOT_VERSION}.zip"
+          cd u-boot-2025.10
+          # Use qemu-x86_64_defconfig for x86_64 EFI support
+          make qemu-x86_64_defconfig
           make -j$(nproc)
           cd ..
 
@@ -89,7 +91,7 @@ jobs:
           cp build/initramfs.cpio.gz iso/boot/
 
           # Use U-Boot as EFI application
-          cp u-boot-2024.01/u-boot-x86-64.efi iso/boot/efi/boot/bootx64.efi
+          cp u-boot-2025.10/u-boot-x86-64.efi iso/boot/efi/boot/bootx64.efi
 
           # Create U-Boot script
           cat > iso/boot/boot.scr <<EOF
@@ -98,7 +100,7 @@ jobs:
           load \${devtype} \${devnum}:1 \${ramdisk_addr_r} /boot/initramfs.cpio.gz
           zboot \${kernel_addr_r} - \${ramdisk_addr_r}
           EOF
-          u-boot-2024.01/tools/mkimage -A x86 -T script -C none -n "Boot script" -d iso/boot/boot.scr iso/boot/boot.scr.uimg || \
+          u-boot-2025.10/tools/mkimage -A x86 -T script -C none -n "Boot script" -d iso/boot/boot.scr iso/boot/boot.scr.uimg || \
             echo "Warning: mkimage failed, using plain script"
 
           # Verify files are in place
