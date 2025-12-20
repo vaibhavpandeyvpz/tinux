@@ -1,0 +1,106 @@
+name: Build Tinux ISOs
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    strategy:
+      matrix:
+        kernel: [6.18.2, 5.15.197]
+        busybox: [1.37.0]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            bison \
+            build-essential \
+            flex \
+            libelf-dev \
+            libncurses-dev \
+            libssl-dev \
+            xz-utils \
+            grub-pc-bin \
+            grub-efi-amd64-bin \
+            xorriso \
+            mtools \
+            bc
+
+      - name: Build Tinux (Kernel ${{ matrix.kernel }}, Busybox ${{ matrix.busybox }})
+        run: |
+          # Run build.sh non-interactively by piping 'n' responses
+          echo -e "n\nn" | ./build.sh ${{ matrix.kernel }} ${{ matrix.busybox }}
+
+      - name: Create bootable ISO
+        run: |
+          # Determine ISO name based on event type
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TINUX_VERSION="${{ github.event.release.tag_name }}"
+            # Strip 'v' prefix if present
+            TINUX_VERSION="${TINUX_VERSION#v}"
+            ISO_NAME="tinux-${TINUX_VERSION}-kernel-${{ matrix.kernel }}-busybox-${{ matrix.busybox }}.iso"
+          else
+            ISO_NAME="tinux-kernel-${{ matrix.kernel }}-busybox-${{ matrix.busybox }}.iso"
+          fi
+          echo "ISO_NAME=${ISO_NAME}" >> $GITHUB_ENV
+
+          # x86_64 builds to arch/x86/boot/bzImage
+          if [ -f "build/bzImage" ]; then
+            KERNEL_PATH="build/bzImage"
+          elif [ -f "build/kernel/arch/x86/boot/bzImage" ]; then
+            KERNEL_PATH="build/kernel/arch/x86/boot/bzImage"
+          else
+            echo "Error: Kernel image not found"
+            exit 1
+          fi
+
+          # Create ISO structure
+          mkdir -p iso/boot/grub
+
+          # Copy kernel and initramfs
+          cp "${KERNEL_PATH}" iso/boot/bzImage
+          cp build/initramfs.cpio.gz iso/boot/initramfs.cpio.gz
+
+          # Create GRUB configuration
+          cat > iso/boot/grub/grub.cfg <<EOF
+          set timeout=10
+          set default=0
+
+          menuentry "Tinux (Kernel ${{ matrix.kernel }}, Busybox ${{ matrix.busybox }})" --class gnu-linux {
+            linux /boot/bzImage console=tty0 rdinit=/init
+            initrd /boot/initramfs.cpio.gz
+          }
+          EOF
+
+          # Create ISO using grub-mkrescue (supports both UEFI and BIOS)
+          grub-mkrescue -o "${ISO_NAME}" iso/
+
+      - name: Upload ISO artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: tinux-kernel-${{ matrix.kernel }}-busybox-${{ matrix.busybox }}
+          path: ${{ env.ISO_NAME }}
+          retention-days: 30
+
+      - name: Upload ISO to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ env.ISO_NAME }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

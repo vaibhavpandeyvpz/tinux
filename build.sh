@@ -65,30 +65,51 @@ tar -xf "$CACHE/$BUSYBOX_ARCHIVE" -C "$BUSYBOX_SOURCE" --strip 1 || abort "Could
 
 rm -rf "$WD/build"
 
-echo Building kernel $KERNEL using $THREADS threads...
-mkdir -p "$KERNEL_BUILD"
-cd "$KERNEL_SOURCE"
-make O="$KERNEL_BUILD" defconfig
-cd "$KERNEL_BUILD"
-read -p "Would you like to customize kernel build config? (yN) " -n 1 -r
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    make menuconfig
-fi
-make -j$THREADS
-cp "$KERNEL_BUILD/arch/"*"/boot/bzImage" "$WD/build/"
-
 echo Building busybox $BUSYBOX using $THREADS threads...
 mkdir -p "$BUSYBOX_BUILD"
 cd "$BUSYBOX_SOURCE"
 make O="$BUSYBOX_BUILD" defconfig
 cd "$BUSYBOX_BUILD"
 sed -i -e "s/.*CONFIG_STATIC.*/CONFIG_STATIC=y/" .config
+sed -i -e 's/^CONFIG_TC=y/# CONFIG_TC is not set/' .config
+make oldconfig
 read -p "Would you like to customize busybox build config? (yN) " -n 1 -r
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     make menuconfig
 fi
 make -j$THREADS
 make install
+
+echo Building kernel $KERNEL using $THREADS threads...
+mkdir -p "$KERNEL_BUILD"
+cd "$KERNEL_SOURCE"
+make O="$KERNEL_BUILD" defconfig
+cd "$KERNEL_BUILD"
+
+# Ensure initramfs/initrd support is enabled
+CONFIG_CHANGED=0
+if ! grep -q "^CONFIG_BLK_DEV_INITRD=y" .config; then
+    sed -i 's/# CONFIG_BLK_DEV_INITRD is not set/CONFIG_BLK_DEV_INITRD=y/' .config 2>/dev/null || \
+        echo "CONFIG_BLK_DEV_INITRD=y" >> .config
+    CONFIG_CHANGED=1
+fi
+# Ensure gzip decompression support for compressed initramfs
+if ! grep -q "^CONFIG_RD_GZIP=y" .config; then
+    sed -i 's/# CONFIG_RD_GZIP is not set/CONFIG_RD_GZIP=y/' .config 2>/dev/null || \
+        echo "CONFIG_RD_GZIP=y" >> .config
+    CONFIG_CHANGED=1
+fi
+# Rebuild kernel config if config was changed
+if [ $CONFIG_CHANGED -eq 1 ]; then
+    make olddefconfig
+fi
+read -p "Would you like to customize kernel build config? (yN) " -n 1 -r
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    make menuconfig
+fi
+
+make -j$THREADS
+cp "$KERNEL_BUILD/arch/"*"/boot/bzImage" "$WD/build/"
 
 echo Building ramdisk...
 if [[ -d "$INITRAMFS_BUILD" ]]; then
@@ -104,12 +125,12 @@ echo "#!/bin/sh
 dmesg -n 1
 clear
 
-mount -t devtmpfs none /dev
-mount -t proc none /proc
-mount -t sysfs none /sys
+mount -t devtmpfs devtmpfs /dev
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
 
 mkdir -p /dev/pts
-mount -t devpts none /dev/pts
+mount -t devpts devpts /dev/pts
 
 cat <<!
 
@@ -122,7 +143,7 @@ System startup took \$(cut -d' ' -f1 /proc/uptime) seconds.
   ▀       ▐ █  █ █ █▄ ▄█ █   ▀▄ 
             █   ██  ▀▀▀   ▀     
 
-Tinux/0.0.1
+github.com/vaibhavpandeyvpz/tinux
 
 !" > etc/init.d/rcS
 chmod +x etc/init.d/rcS
