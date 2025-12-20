@@ -84,14 +84,28 @@ jobs:
 
           cp "$ISOLINUX_BIN" iso/isolinux/isolinux.bin
 
-          # Copy additional syslinux files if available
-          for file in ldlinux.c32 libutil.c32 menu.c32; do
-            for path in /usr/lib/syslinux/$file /usr/share/syslinux/$file; do
-              if [ -f "$path" ]; then
-                cp "$path" iso/isolinux/ 2>/dev/null && break
-              fi
-            done
+          # Copy required syslinux files (ldlinux.c32 is critical)
+          SYSLINUX_DIR=""
+          for dir in /usr/lib/syslinux /usr/share/syslinux /usr/lib/ISOLINUX; do
+            if [ -d "$dir" ] && [ -f "$dir/ldlinux.c32" ]; then
+              SYSLINUX_DIR="$dir"
+              break
+            fi
           done
+
+          if [ -z "$SYSLINUX_DIR" ]; then
+            echo "Error: syslinux directory with ldlinux.c32 not found"
+            exit 1
+          fi
+
+          # Copy all .c32 files from syslinux directory
+          cp "$SYSLINUX_DIR"/*.c32 iso/isolinux/ 2>/dev/null || true
+
+          # Verify critical files
+          if [ ! -f "iso/isolinux/ldlinux.c32" ]; then
+            echo "Error: ldlinux.c32 not found after copy"
+            exit 1
+          fi
 
           # Create isolinux configuration
           cat > iso/isolinux/isolinux.cfg <<EOF
