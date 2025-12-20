@@ -28,6 +28,22 @@ You can download ISOs from:
 
 ISOs are bootable on both UEFI and BIOS systems.
 
+### Running with QEMU
+
+To test the ISO using [QEMU](https://www.qemu.org/), use the following command:
+
+```bash
+qemu-system-x86_64 -boot d -cdrom tinux-1.0.0-kernel-5.15.197-busybox-1.37.0.iso -m 512m
+```
+
+Replace the ISO filename with the one you downloaded. The `-m 512m` flag allocates 512MB of RAM to the virtual machine, which is sufficient for Tinux.
+
+For better console output, you can add `-serial stdio`:
+
+```bash
+qemu-system-x86_64 -boot d -cdrom tinux-1.0.0-kernel-5.15.197-busybox-1.37.0.iso -m 512m -serial stdio
+```
+
 ### Building
 
 Navigate into the `Tinux` folder, and run command as follows:
