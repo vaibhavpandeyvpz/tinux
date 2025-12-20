@@ -104,7 +104,7 @@ jobs:
           menuentry "Tinux (Kernel ${{ matrix.kernel }}, ${ARCH})" --class os {
             insmod gzio
             insmod part_msdos
-            linux /boot/${KERNEL_IMAGE} console=ttyS0 rdinit=/init
+            linux /boot/${KERNEL_IMAGE} console=ttyS0 rdinit=/init root=/dev/ram0
             initrd /boot/initramfs.cpio.gz
           }
           EOF

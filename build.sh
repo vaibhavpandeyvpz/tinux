@@ -71,18 +71,27 @@ cd "$KERNEL_SOURCE"
 make O="$KERNEL_BUILD" defconfig
 cd "$KERNEL_BUILD"
 # Ensure initramfs/initrd support is enabled
+CONFIG_CHANGED=0
 if ! grep -q "^CONFIG_BLK_DEV_INITRD=y" .config; then
     sed -i 's/# CONFIG_BLK_DEV_INITRD is not set/CONFIG_BLK_DEV_INITRD=y/' .config 2>/dev/null || \
         echo "CONFIG_BLK_DEV_INITRD=y" >> .config
+    CONFIG_CHANGED=1
 fi
 # Ensure gzip decompression support for compressed initramfs
 if ! grep -q "^CONFIG_RD_GZIP=y" .config; then
     sed -i 's/# CONFIG_RD_GZIP is not set/CONFIG_RD_GZIP=y/' .config 2>/dev/null || \
         echo "CONFIG_RD_GZIP=y" >> .config
+    CONFIG_CHANGED=1
 fi
 read -p "Would you like to customize kernel build config? (yN) " -n 1 -r
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     make menuconfig
+    CONFIG_CHANGED=1
+fi
+# Rebuild kernel if config was changed
+if [ $CONFIG_CHANGED -eq 1 ]; then
+    echo "Kernel config changed, rebuilding..."
+    make olddefconfig
 fi
 make -j$THREADS
 # Copy kernel image (name varies by architecture)
