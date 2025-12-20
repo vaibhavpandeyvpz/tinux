@@ -65,6 +65,22 @@ tar -xf "$CACHE/$BUSYBOX_ARCHIVE" -C "$BUSYBOX_SOURCE" --strip 1 || abort "Could
 
 rm -rf "$WD/build"
 
+echo Building busybox $BUSYBOX using $THREADS threads...
+mkdir -p "$BUSYBOX_BUILD"
+cd "$BUSYBOX_SOURCE"
+make O="$BUSYBOX_BUILD" defconfig
+cd "$BUSYBOX_BUILD"
+sed -i -e "s/.*CONFIG_STATIC.*/CONFIG_STATIC=y/" .config
+sed -i -e 's/^CONFIG_TC=y/# CONFIG_TC is not set/' .config
+echo "Busybox config changed, rebuilding..."
+make oldconfig
+read -p "Would you like to customize busybox build config? (yN) " -n 1 -r
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    make menuconfig
+fi
+make -j$THREADS
+make install
+
 echo Building kernel $KERNEL using $THREADS threads...
 mkdir -p "$KERNEL_BUILD"
 cd "$KERNEL_SOURCE"
@@ -103,22 +119,6 @@ else
     cp "$KERNEL_BUILD/arch/"*"/boot/bzImage" "$WD/build/" 2>/dev/null || \
     abort "Could not find kernel image (bzImage)"
 fi
-
-echo Building busybox $BUSYBOX using $THREADS threads...
-mkdir -p "$BUSYBOX_BUILD"
-cd "$BUSYBOX_SOURCE"
-make O="$BUSYBOX_BUILD" defconfig
-cd "$BUSYBOX_BUILD"
-sed -i -e "s/.*CONFIG_STATIC.*/CONFIG_STATIC=y/" .config
-sed -i -e 's/^CONFIG_TC=y/# CONFIG_TC is not set/' .config
-echo "Busybox config changed, rebuilding..."
-make oldconfig
-read -p "Would you like to customize busybox build config? (yN) " -n 1 -r
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    make menuconfig
-fi
-make -j$THREADS
-make install
 
 echo Building ramdisk...
 if [[ -d "$INITRAMFS_BUILD" ]]; then
