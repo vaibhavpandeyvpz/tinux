@@ -70,6 +70,11 @@ mkdir -p "$KERNEL_BUILD"
 cd "$KERNEL_SOURCE"
 make O="$KERNEL_BUILD" defconfig
 cd "$KERNEL_BUILD"
+# Ensure initramfs/initrd support is enabled
+if ! grep -q "^CONFIG_BLK_DEV_INITRD=y" .config; then
+    sed -i 's/# CONFIG_BLK_DEV_INITRD is not set/CONFIG_BLK_DEV_INITRD=y/' .config 2>/dev/null || \
+        echo "CONFIG_BLK_DEV_INITRD=y" >> .config
+fi
 read -p "Would you like to customize kernel build config? (yN) " -n 1 -r
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     make menuconfig

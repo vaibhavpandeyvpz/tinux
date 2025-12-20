@@ -159,7 +159,7 @@ jobs:
           DEFAULT linux
           LABEL linux
             KERNEL /boot/${KERNEL_IMAGE}
-            APPEND initrd=/boot/initramfs.cpio.gz console=tty0 console=ttyS0,115200n8 earlyprintk=serial,ttyS0,115200 rdinit=/init rootfstype=ramfs
+            APPEND initrd=/boot/initramfs.cpio.gz console=ttyS0 rdinit=/init
           EOF
               xorriso -as mkisofs \
                 -b isolinux/isolinux.bin \
