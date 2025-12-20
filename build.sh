@@ -72,7 +72,6 @@ make O="$BUSYBOX_BUILD" defconfig
 cd "$BUSYBOX_BUILD"
 sed -i -e "s/.*CONFIG_STATIC.*/CONFIG_STATIC=y/" .config
 sed -i -e 's/^CONFIG_TC=y/# CONFIG_TC is not set/' .config
-echo "Busybox config changed, rebuilding..."
 make oldconfig
 read -p "Would you like to customize busybox build config? (yN) " -n 1 -r
 if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -102,7 +101,6 @@ if ! grep -q "^CONFIG_RD_GZIP=y" .config; then
 fi
 # Rebuild kernel config if config was changed
 if [ $CONFIG_CHANGED -eq 1 ]; then
-    echo "Kernel config changed, rebuilding..."
     make olddefconfig
 fi
 read -p "Would you like to customize kernel build config? (yN) " -n 1 -r

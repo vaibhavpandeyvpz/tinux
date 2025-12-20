@@ -64,9 +64,6 @@ jobs:
           cp "${KERNEL_PATH}" iso/boot/bzImage
           cp build/initramfs.cpio.gz iso/boot/initramfs.cpio.gz
 
-          file iso/boot/bzImage
-          file iso/boot/initramfs.cpio.gz
-
           # Copy isolinux files
           cp /usr/lib/ISOLINUX/isolinux.bin iso/isolinux/
           cp /usr/lib/syslinux/modules/bios/*.c32 iso/isolinux/
