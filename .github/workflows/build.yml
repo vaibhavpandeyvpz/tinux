@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    runs-on: ${{ matrix.arch == 'amd64' && 'ubuntu-latest' || 'ubuntu-latest-arm64' }}
+    runs-on: ${{ matrix.arch == 'amd64' && 'ubuntu-latest' || 'ubuntu-24.04-arm' }}
 
     strategy:
       matrix:
@@ -39,7 +39,7 @@ jobs:
 
           # Install architecture-specific packages
           if [ "$ARCH" = "amd64" ]; then
-            sudo apt-get install -y grub-pc-bin syslinux isolinux
+            sudo apt-get install -y grub-pc-bin
           elif [ "$ARCH" = "arm64" ]; then
             sudo apt-get install -y grub-efi-arm64 grub-efi-arm64-bin
           fi
@@ -60,49 +60,31 @@ jobs:
 
           mkdir -p iso/boot/grub
 
-          # Find kernel image (name and location vary by architecture)
-          KERNEL_IMAGE=""
-          KERNEL_PATH=""
-
-          # Check in build/ directory first (where build.sh should copy it)
-          for img in bzImage Image vmlinuz; do
-            if [ -f "build/${img}" ]; then
-              KERNEL_IMAGE="${img}"
-              KERNEL_PATH="build/${img}"
-              break
+          # Determine kernel image path based on architecture
+          if [ "$ARCH" = "amd64" ]; then
+            # x86_64 builds to arch/x86/boot/bzImage
+            if [ -f "build/bzImage" ]; then
+              KERNEL_IMAGE="bzImage"
+              KERNEL_PATH="build/bzImage"
+            elif [ -f "build/kernel/arch/x86/boot/bzImage" ]; then
+              KERNEL_IMAGE="bzImage"
+              KERNEL_PATH="build/kernel/arch/x86/boot/bzImage"
+            else
+              echo "Error: Kernel image not found for amd64"
+              exit 1
             fi
-          done
-
-          # If not found, search in build/kernel/arch/*/boot/
-          # If not found, search in build/kernel/arch/*/boot/
-          if [ -z "$KERNEL_IMAGE" ]; then
-            echo "Kernel image not in build/, searching in build/kernel/arch/*/boot/..."
-            for arch_dir in build/kernel/arch/*/boot/; do
-              if [ -d "$arch_dir" ]; then
-                for img in bzImage Image vmlinuz Image.gz vmlinux; do
-                  if [ -f "${arch_dir}${img}" ]; then
-                    KERNEL_IMAGE="${img}"
-                    KERNEL_PATH="${arch_dir}${img}"
-                    echo "Found kernel image: ${KERNEL_PATH}"
-                    # Copy to build/ for consistency
-                    cp "${KERNEL_PATH}" "build/${KERNEL_IMAGE}"
-                    KERNEL_PATH="build/${KERNEL_IMAGE}"
-                    break 2
-                  fi
-                done
-              fi
-            done
-          fi
-
-          if [ -z "$KERNEL_IMAGE" ]; then
-            echo "Error: Kernel image not found"
-            echo "Build directory contents:"
-            ls -la build/
-            if [ -d build/kernel ]; then
-              echo "Kernel build directory contents:"
-              find build/kernel/arch -type f \( -name "*Image*" -o -name "bzImage" -o -name "vmlinuz" -o -name "vmlinux" \) 2>/dev/null | head -20 || true
+          elif [ "$ARCH" = "arm64" ]; then
+            # arm64 builds to arch/arm64/boot/Image
+            if [ -f "build/Image" ]; then
+              KERNEL_IMAGE="Image"
+              KERNEL_PATH="build/Image"
+            elif [ -f "build/kernel/arch/arm64/boot/Image" ]; then
+              KERNEL_IMAGE="Image"
+              KERNEL_PATH="build/kernel/arch/arm64/boot/Image"
+            else
+              echo "Error: Kernel image not found for arm64"
+              exit 1
             fi
-            exit 1
           fi
 
           cp "${KERNEL_PATH}" iso/boot/${KERNEL_IMAGE}
@@ -116,64 +98,19 @@ jobs:
 
           # Create GRUB configuration
           cat > iso/boot/grub/grub.cfg <<EOF
-          set timeout=5
+          set timeout=10
           set default=0
 
-          menuentry "Tinux (Kernel ${{ matrix.kernel }}, ${ARCH})" {
+          menuentry "Tinux (Kernel ${{ matrix.kernel }}, ${ARCH})" --class os {
+            insmod gzio
+            insmod part_msdos
             linux /boot/${KERNEL_IMAGE} console=ttyS0 rdinit=/init
             initrd /boot/initramfs.cpio.gz
           }
           EOF
 
           # Create ISO using grub-mkrescue (supports both UEFI and BIOS)
-          grub-mkrescue -o "${ISO_NAME}" iso/ || {
-            if [ "$ARCH" = "amd64" ]; then
-              echo "grub-mkrescue failed, trying alternative method with isolinux"
-              # Alternative: use isolinux for BIOS boot (amd64 only)
-              mkdir -p iso/isolinux
-              
-              # Find isolinux.bin in common locations
-              ISOLINUX_BIN=""
-              for path in /usr/lib/ISOLINUX/isolinux.bin /usr/lib/syslinux/isolinux.bin /usr/share/syslinux/isolinux.bin /usr/lib/ISOLINUX/isolinux-debug.bin; do
-                if [ -f "$path" ]; then
-                  ISOLINUX_BIN="$path"
-                  break
-                fi
-              done
-              
-              if [ -z "$ISOLINUX_BIN" ]; then
-                echo "Error: isolinux.bin not found"
-                exit 1
-              fi
-              
-              cp "$ISOLINUX_BIN" iso/isolinux/isolinux.bin
-              
-              # Find ldlinux.c32 if available
-              for path in /usr/lib/syslinux/modules/bios/ldlinux.c32 /usr/share/syslinux/ldlinux.c32; do
-                if [ -f "$path" ]; then
-                  cp "$path" iso/isolinux/ 2>/dev/null && break
-                fi
-              done
-              
-              cat > iso/isolinux/isolinux.cfg <<EOF
-          DEFAULT linux
-          LABEL linux
-            KERNEL /boot/${KERNEL_IMAGE}
-            APPEND initrd=/boot/initramfs.cpio.gz console=ttyS0 rdinit=/init
-          EOF
-              xorriso -as mkisofs \
-                -b isolinux/isolinux.bin \
-                -c isolinux/boot.cat \
-                -no-emul-boot \
-                -boot-load-size 4 \
-                -boot-info-table \
-                -o "${ISO_NAME}" \
-                iso/
-            else
-              echo "Error: grub-mkrescue failed for ${ARCH} and no fallback available"
-              exit 1
-            fi
-          }
+          grub-mkrescue -o "${ISO_NAME}" iso/
 
       - name: Upload ISO artifact
         uses: actions/upload-artifact@v6
