@@ -55,8 +55,8 @@ jobs:
 
           unzip -q "$UBOOT_CACHE/u-boot-${UBOOT_VERSION}.zip"
           cd u-boot-2025.10
-          # Use qemu-x86_64_defconfig for x86_64 EFI support
-          make qemu-x86_64_defconfig
+          # Use efi-x86_payload64_defconfig for x86_64 EFI support
+          make efi-x86_payload64_defconfig
           make -j$(nproc)
           # List built files to verify output
           echo "U-Boot build output:"
