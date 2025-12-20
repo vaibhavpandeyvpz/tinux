@@ -68,11 +68,30 @@ jobs:
           cp "${KERNEL_PATH}" iso/boot/vmlinuz64
           cp build/initramfs.cpio.gz iso/boot/initrd.img
 
-          # Copy isolinux files
-          cp /usr/share/syslinux/isolinux.bin iso/isolinux/
-          cp /usr/share/syslinux/ldlinux.c32 iso/isolinux/ 2>/dev/null || true
-          cp /usr/share/syslinux/libutil.c32 iso/isolinux/ 2>/dev/null || true
-          cp /usr/share/syslinux/menu.c32 iso/isolinux/ 2>/dev/null || true
+          # Copy isolinux files (find in common locations)
+          ISOLINUX_BIN=""
+          for path in /usr/lib/ISOLINUX/isolinux.bin /usr/lib/syslinux/isolinux.bin /usr/share/syslinux/isolinux.bin; do
+            if [ -f "$path" ]; then
+              ISOLINUX_BIN="$path"
+              break
+            fi
+          done
+
+          if [ -z "$ISOLINUX_BIN" ]; then
+            echo "Error: isolinux.bin not found"
+            exit 1
+          fi
+
+          cp "$ISOLINUX_BIN" iso/isolinux/isolinux.bin
+
+          # Copy additional syslinux files if available
+          for file in ldlinux.c32 libutil.c32 menu.c32; do
+            for path in /usr/lib/syslinux/$file /usr/share/syslinux/$file; do
+              if [ -f "$path" ]; then
+                cp "$path" iso/isolinux/ 2>/dev/null && break
+              fi
+            done
+          done
 
           # Create isolinux configuration
           cat > iso/isolinux/isolinux.cfg <<EOF
@@ -89,18 +108,41 @@ jobs:
           file iso/boot/vmlinuz64
           file iso/boot/initrd.img
 
+          # Find isohdpfx.bin for hybrid MBR
+          ISOHDPFX=""
+          for path in /usr/lib/syslinux/isohdpfx.bin /usr/share/syslinux/isohdpfx.bin; do
+            if [ -f "$path" ]; then
+              ISOHDPFX="$path"
+              break
+            fi
+          done
+
           # Create bootable ISO with isolinux
-          xorriso -as mkisofs \
-            -l -r -J \
-            -V "TINUX" \
-            -b isolinux/isolinux.bin \
-            -isohybrid-mbr /usr/share/syslinux/isohdpfx.bin \
-            -no-emul-boot \
-            -boot-load-size 4 \
-            -boot-info-table \
-            -c isolinux/boot.cat \
-            -o "${ISO_NAME}" \
-            iso/
+          if [ -n "$ISOHDPFX" ]; then
+            xorriso -as mkisofs \
+              -l -r -J \
+              -V "TINUX" \
+              -b isolinux/isolinux.bin \
+              -isohybrid-mbr "$ISOHDPFX" \
+              -no-emul-boot \
+              -boot-load-size 4 \
+              -boot-info-table \
+              -c isolinux/boot.cat \
+              -o "${ISO_NAME}" \
+              iso/
+          else
+            # Fallback without hybrid MBR
+            xorriso -as mkisofs \
+              -l -r -J \
+              -V "TINUX" \
+              -b isolinux/isolinux.bin \
+              -no-emul-boot \
+              -boot-load-size 4 \
+              -boot-info-table \
+              -c isolinux/boot.cat \
+              -o "${ISO_NAME}" \
+              iso/
+          fi
 
       - name: Upload ISO artifact
         uses: actions/upload-artifact@v6
