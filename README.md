@@ -4,7 +4,7 @@ Using Tinux, you can build your very own, tiny ([Busybox](https://busybox.net/) 
 
 [![Build Status](https://github.com/vaibhavpandeyvpz/tinux/actions/workflows/build.yml/badge.svg)](https://github.com/vaibhavpandeyvpz/tinux/actions/workflows/build.yml)
 
-[![Screenshot](https://raw.githubusercontent.com/vaibhavpandeyvpz/tinux/master/screenshot.png)](https://raw.githubusercontent.com/vaibhavpandeyvpz/tinux/master/screenshot.png)
+![Screenshot](screenshot.png)
 
 ### Requirements
 
