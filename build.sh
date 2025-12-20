@@ -110,6 +110,7 @@ cd "$BUSYBOX_SOURCE"
 make O="$BUSYBOX_BUILD" defconfig
 cd "$BUSYBOX_BUILD"
 sed -i -e "s/.*CONFIG_STATIC.*/CONFIG_STATIC=y/" .config
+sed -i -e 's/^CONFIG_TC=y/# CONFIG_TC is not set/' .config
 echo "Busybox config changed, rebuilding..."
 make oldconfig
 read -p "Would you like to customize busybox build config? (yN) " -n 1 -r
