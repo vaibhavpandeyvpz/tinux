@@ -107,7 +107,7 @@ jobs:
 
           cp "${KERNEL_PATH}" iso/boot/${KERNEL_IMAGE}
           cp build/initramfs.cpio.gz iso/boot/
-          
+
           # Verify files are in place
           echo "Verifying ISO files:"
           ls -lh iso/boot/
@@ -120,7 +120,7 @@ jobs:
           set default=0
 
           menuentry "Tinux (Kernel ${{ matrix.kernel }}, ${ARCH})" {
-            linux /boot/${KERNEL_IMAGE} console=tty0 console=ttyS0,115200n8 earlyprintk=serial,ttyS0,115200 rdinit=/init root=/dev/ram0 rw
+            linux /boot/${KERNEL_IMAGE} console=ttyS0 rdinit=/init
             initrd /boot/initramfs.cpio.gz
           }
           EOF
@@ -159,7 +159,7 @@ jobs:
           DEFAULT linux
           LABEL linux
             KERNEL /boot/${KERNEL_IMAGE}
-            APPEND initrd=/boot/initramfs.cpio.gz console=tty0 console=ttyS0,115200n8 earlyprintk=serial,ttyS0,115200 rdinit=/init root=/dev/ram0 rw
+            APPEND initrd=/boot/initramfs.cpio.gz console=tty0 console=ttyS0,115200n8 earlyprintk=serial,ttyS0,115200 rdinit=/init rootfstype=ramfs
           EOF
               xorriso -as mkisofs \
                 -b isolinux/isolinux.bin \
