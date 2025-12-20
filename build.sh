@@ -94,16 +94,13 @@ if [ $CONFIG_CHANGED -eq 1 ]; then
     make olddefconfig
 fi
 make -j$THREADS
-# Copy kernel image (name varies by architecture)
+# Copy kernel image (x86_64 builds to arch/x86/boot/bzImage)
 if [ -f "$KERNEL_BUILD/arch/x86/boot/bzImage" ]; then
     cp "$KERNEL_BUILD/arch/x86/boot/bzImage" "$WD/build/"
-elif [ -f "$KERNEL_BUILD/arch/arm64/boot/Image" ]; then
-    cp "$KERNEL_BUILD/arch/arm64/boot/Image" "$WD/build/"
 else
-    # Fallback: try to find any kernel image
+    # Fallback: try to find bzImage
     cp "$KERNEL_BUILD/arch/"*"/boot/bzImage" "$WD/build/" 2>/dev/null || \
-    cp "$KERNEL_BUILD/arch/"*"/boot/Image" "$WD/build/" 2>/dev/null || \
-    abort "Could not find kernel image"
+    abort "Could not find kernel image (bzImage)"
 fi
 
 echo Building busybox $BUSYBOX using $THREADS threads...

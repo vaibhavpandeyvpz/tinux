@@ -9,13 +9,12 @@ on:
 
 jobs:
   build:
-    runs-on: ${{ matrix.arch == 'amd64' && 'ubuntu-latest' || 'ubuntu-24.04-arm' }}
+    runs-on: ubuntu-latest
 
     strategy:
       matrix:
         kernel: [6.18.2, 5.15.197]
         busybox: [1.37.0]
-        arch: [amd64, arm64]
 
     steps:
       - name: Checkout repository
@@ -23,7 +22,6 @@ jobs:
 
       - name: Install dependencies
         run: |
-          ARCH="${{ matrix.arch }}"
           sudo apt-get update
           sudo apt-get install -y \
             bison \
@@ -33,62 +31,75 @@ jobs:
             libncurses-dev \
             libssl-dev \
             xz-utils \
-            grub-common \
+            python3 \
+            python3-pip \
+            python3-setuptools \
             mtools \
-            xorriso
+            xorriso \
+            dosfstools \
+            e2fsprogs \
+            bc
 
-          # Install architecture-specific packages
-          if [ "$ARCH" = "amd64" ]; then
-            sudo apt-get install -y grub-pc-bin
-          elif [ "$ARCH" = "arm64" ]; then
-            sudo apt-get install -y grub-efi-arm64 grub-efi-arm64-bin
-          fi
-
-      - name: Build Tinux (Kernel ${{ matrix.kernel }}, Busybox ${{ matrix.busybox }}, Arch ${{ matrix.arch }})
+      - name: Build Tinux (Kernel ${{ matrix.kernel }}, Busybox ${{ matrix.busybox }})
         env:
-          ARCH: ${{ matrix.arch == 'amd64' && 'x86_64' || 'arm64' }}
+          ARCH: x86_64
         run: |
           # Run build.sh non-interactively by piping 'n' responses
-          # Set ARCH for kernel and busybox builds (kernel uses x86_64 for amd64, arm64 for arm64)
-          export ARCH=${{ matrix.arch == 'amd64' && 'x86_64' || 'arm64' }}
+          export ARCH=x86_64
           echo -e "n\nn" | env ARCH="$ARCH" ./build.sh ${{ matrix.kernel }} ${{ matrix.busybox }}
+
+      - name: Build U-Boot
+        run: |
+          UBOOT_VERSION="2024.01"
+          UBOOT_URL="https://ftp.denx.de/pub/u-boot/u-boot-${UBOOT_VERSION}.tar.bz2"
+          UBOOT_CACHE="$HOME/.cache/tinux"
+          mkdir -p "$UBOOT_CACHE"
+
+          if [ ! -f "$UBOOT_CACHE/u-boot-${UBOOT_VERSION}.tar.bz2" ]; then
+            wget -O "$UBOOT_CACHE/u-boot-${UBOOT_VERSION}.tar.bz2" "$UBOOT_URL"
+          fi
+
+          tar -xf "$UBOOT_CACHE/u-boot-${UBOOT_VERSION}.tar.bz2"
+          cd u-boot-${UBOOT_VERSION}
+          make x86_64_defconfig
+          make -j$(nproc)
+          cd ..
 
       - name: Create bootable ISO
         run: |
-          ARCH="${{ matrix.arch }}"
-          ISO_NAME="tinux-kernel-${{ matrix.kernel }}-busybox-${{ matrix.busybox }}-${ARCH}.iso"
+          ISO_NAME="tinux-kernel-${{ matrix.kernel }}-busybox-${{ matrix.busybox }}.iso"
 
-          mkdir -p iso/boot/grub
-
-          # Determine kernel image path based on architecture
-          if [ "$ARCH" = "amd64" ]; then
-            # x86_64 builds to arch/x86/boot/bzImage
-            if [ -f "build/bzImage" ]; then
-              KERNEL_IMAGE="bzImage"
-              KERNEL_PATH="build/bzImage"
-            elif [ -f "build/kernel/arch/x86/boot/bzImage" ]; then
-              KERNEL_IMAGE="bzImage"
-              KERNEL_PATH="build/kernel/arch/x86/boot/bzImage"
-            else
-              echo "Error: Kernel image not found for amd64"
-              exit 1
-            fi
-          elif [ "$ARCH" = "arm64" ]; then
-            # arm64 builds to arch/arm64/boot/Image
-            if [ -f "build/Image" ]; then
-              KERNEL_IMAGE="Image"
-              KERNEL_PATH="build/Image"
-            elif [ -f "build/kernel/arch/arm64/boot/Image" ]; then
-              KERNEL_IMAGE="Image"
-              KERNEL_PATH="build/kernel/arch/arm64/boot/Image"
-            else
-              echo "Error: Kernel image not found for arm64"
-              exit 1
-            fi
+          # x86_64 builds to arch/x86/boot/bzImage
+          if [ -f "build/bzImage" ]; then
+            KERNEL_IMAGE="bzImage"
+            KERNEL_PATH="build/bzImage"
+          elif [ -f "build/kernel/arch/x86/boot/bzImage" ]; then
+            KERNEL_IMAGE="bzImage"
+            KERNEL_PATH="build/kernel/arch/x86/boot/bzImage"
+          else
+            echo "Error: Kernel image not found"
+            exit 1
           fi
+
+          # Create ISO structure
+          mkdir -p iso/boot/efi/boot
+          mkdir -p iso/boot
 
           cp "${KERNEL_PATH}" iso/boot/${KERNEL_IMAGE}
           cp build/initramfs.cpio.gz iso/boot/
+
+          # Use U-Boot as EFI application
+          cp u-boot-2024.01/u-boot-x86-64.efi iso/boot/efi/boot/bootx64.efi
+
+          # Create U-Boot script
+          cat > iso/boot/boot.scr <<EOF
+          setenv bootargs 'console=ttyS0 rdinit=/init'
+          load \${devtype} \${devnum}:1 \${kernel_addr_r} /boot/${KERNEL_IMAGE}
+          load \${devtype} \${devnum}:1 \${ramdisk_addr_r} /boot/initramfs.cpio.gz
+          zboot \${kernel_addr_r} - \${ramdisk_addr_r}
+          EOF
+          u-boot-2024.01/tools/mkimage -A x86 -T script -C none -n "Boot script" -d iso/boot/boot.scr iso/boot/boot.scr.uimg || \
+            echo "Warning: mkimage failed, using plain script"
 
           # Verify files are in place
           echo "Verifying ISO files:"
@@ -96,25 +107,18 @@ jobs:
           file iso/boot/${KERNEL_IMAGE}
           file iso/boot/initramfs.cpio.gz
 
-          # Create GRUB configuration
-          cat > iso/boot/grub/grub.cfg <<EOF
-          set timeout=10
-          set default=0
-
-          menuentry "Tinux (Kernel ${{ matrix.kernel }}, ${ARCH})" --class os {
-            insmod gzio
-            insmod part_msdos
-            linux /boot/${KERNEL_IMAGE} console=ttyS0 rdinit=/init root=/dev/ram0
-            initrd /boot/initramfs.cpio.gz
-          }
-          EOF
-
-          # Create ISO using grub-mkrescue (supports both UEFI and BIOS)
-          grub-mkrescue -o "${ISO_NAME}" iso/
+          # Create EFI-bootable ISO
+          xorriso -as mkisofs \
+            -R -J \
+            -o "${ISO_NAME}" \
+            -e boot/efi/boot/bootx64.efi \
+            -no-emul-boot \
+            -iso-level 3 \
+            iso/
 
       - name: Upload ISO artifact
         uses: actions/upload-artifact@v6
         with:
-          name: tinux-kernel-${{ matrix.kernel }}-busybox-${{ matrix.busybox }}-${{ matrix.arch }}
-          path: tinux-kernel-${{ matrix.kernel }}-busybox-${{ matrix.busybox }}-${{ matrix.arch }}.iso
+          name: tinux-kernel-${{ matrix.kernel }}-busybox-${{ matrix.busybox }}
+          path: tinux-kernel-${{ matrix.kernel }}-busybox-${{ matrix.busybox }}.iso
           retention-days: 30
