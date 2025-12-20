@@ -90,17 +90,42 @@ jobs:
           file iso/boot/initramfs.cpio.gz
 
           # Create bootable ISO with isolinux
-          xorriso -as mkisofs \
-            -l -r -J \
-            -V "TINUX" \
-            -b isolinux/isolinux.bin \
-            -isohybrid-mbr /usr/lib/syslinux/isohdpfx.bin \
-            -no-emul-boot \
-            -boot-load-size 4 \
-            -boot-info-table \
-            -c isolinux/boot.cat \
-            -o "${ISO_NAME}" \
-            iso/
+          # Find isohdpfx.bin for hybrid MBR (optional, makes ISO bootable from USB too)
+          ISOHDPFX=""
+          for path in /usr/lib/syslinux/isohdpfx.bin /usr/share/syslinux/isohdpfx.bin; do
+            if [ -f "$path" ]; then
+              ISOHDPFX="$path"
+              break
+            fi
+          done
+
+          echo "ISOHDPFX: $ISOHDPFX"
+
+          if [ -n "$ISOHDPFX" ]; then
+            xorriso -as mkisofs \
+              -l -r -J \
+              -V "TINUX" \
+              -b isolinux/isolinux.bin \
+              -isohybrid-mbr "$ISOHDPFX" \
+              -no-emul-boot \
+              -boot-load-size 4 \
+              -boot-info-table \
+              -c isolinux/boot.cat \
+              -o "${ISO_NAME}" \
+              iso/
+          else
+            # Create ISO without hybrid MBR (CD/DVD boot only)
+            xorriso -as mkisofs \
+              -l -r -J \
+              -V "TINUX" \
+              -b isolinux/isolinux.bin \
+              -no-emul-boot \
+              -boot-load-size 4 \
+              -boot-info-table \
+              -c isolinux/boot.cat \
+              -o "${ISO_NAME}" \
+              iso/
+          fi
 
       - name: Upload ISO artifact
         uses: actions/upload-artifact@v6
