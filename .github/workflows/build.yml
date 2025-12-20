@@ -46,12 +46,12 @@ jobs:
 
       - name: Build Tinux (Kernel ${{ matrix.kernel }}, Busybox ${{ matrix.busybox }}, Arch ${{ matrix.arch }})
         env:
-          ARCH: ${{ matrix.arch }}
+          ARCH: ${{ matrix.arch == 'amd64' && 'x86_64' || 'arm64' }}
         run: |
           # Run build.sh non-interactively by piping 'n' responses
-          # Set ARCH for kernel and busybox builds
-          export ARCH=${{ matrix.arch }}
-          echo -e "n\nn" | ARCH=${{ matrix.arch }} ./build.sh ${{ matrix.kernel }} ${{ matrix.busybox }}
+          # Set ARCH for kernel and busybox builds (kernel uses x86_64 for amd64, arm64 for arm64)
+          export ARCH=${{ matrix.arch == 'amd64' && 'x86_64' || 'arm64' }}
+          echo -e "n\nn" | env ARCH="$ARCH" ./build.sh ${{ matrix.kernel }} ${{ matrix.busybox }}
 
       - name: Create bootable ISO
         run: |
@@ -60,22 +60,52 @@ jobs:
 
           mkdir -p iso/boot/grub
 
-          # Find kernel image (name varies by architecture)
-          if [ -f build/bzImage ]; then
-            KERNEL_IMAGE="bzImage"
-            cp build/bzImage iso/boot/
-          elif [ -f build/Image ]; then
-            KERNEL_IMAGE="Image"
-            cp build/Image iso/boot/
-          elif [ -f build/vmlinuz ]; then
-            KERNEL_IMAGE="vmlinuz"
-            cp build/vmlinuz iso/boot/
-          else
-            echo "Error: Kernel image not found in build/"
+          # Find kernel image (name and location vary by architecture)
+          KERNEL_IMAGE=""
+          KERNEL_PATH=""
+
+          # Check in build/ directory first (where build.sh should copy it)
+          for img in bzImage Image vmlinuz; do
+            if [ -f "build/${img}" ]; then
+              KERNEL_IMAGE="${img}"
+              KERNEL_PATH="build/${img}"
+              break
+            fi
+          done
+
+          # If not found, search in build/kernel/arch/*/boot/
+          # If not found, search in build/kernel/arch/*/boot/
+          if [ -z "$KERNEL_IMAGE" ]; then
+            echo "Kernel image not in build/, searching in build/kernel/arch/*/boot/..."
+            for arch_dir in build/kernel/arch/*/boot/; do
+              if [ -d "$arch_dir" ]; then
+                for img in bzImage Image vmlinuz Image.gz vmlinux; do
+                  if [ -f "${arch_dir}${img}" ]; then
+                    KERNEL_IMAGE="${img}"
+                    KERNEL_PATH="${arch_dir}${img}"
+                    echo "Found kernel image: ${KERNEL_PATH}"
+                    # Copy to build/ for consistency
+                    cp "${KERNEL_PATH}" "build/${KERNEL_IMAGE}"
+                    KERNEL_PATH="build/${KERNEL_IMAGE}"
+                    break 2
+                  fi
+                done
+              fi
+            done
+          fi
+
+          if [ -z "$KERNEL_IMAGE" ]; then
+            echo "Error: Kernel image not found"
+            echo "Build directory contents:"
             ls -la build/
+            if [ -d build/kernel ]; then
+              echo "Kernel build directory contents:"
+              find build/kernel/arch -type f \( -name "*Image*" -o -name "bzImage" -o -name "vmlinuz" -o -name "vmlinux" \) 2>/dev/null | head -20 || true
+            fi
             exit 1
           fi
 
+          cp "${KERNEL_PATH}" iso/boot/${KERNEL_IMAGE}
           cp build/initramfs.cpio.gz iso/boot/
 
           # Create GRUB configuration
