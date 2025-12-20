@@ -32,6 +32,7 @@ jobs:
             libssl-dev \
             xz-utils \
             syslinux \
+            syslinux-common \
             isolinux \
             xorriso \
             bc
@@ -85,25 +86,49 @@ jobs:
           cp "$ISOLINUX_BIN" iso/isolinux/isolinux.bin
 
           # Copy required syslinux files (ldlinux.c32 is critical)
+          # First, find where syslinux files are located
+          echo "Searching for syslinux files..."
+          find /usr -name "ldlinux.c32" 2>/dev/null | head -5
+          find /usr -name "isolinux.bin" 2>/dev/null | head -5
+
           SYSLINUX_DIR=""
-          for dir in /usr/lib/syslinux /usr/share/syslinux /usr/lib/ISOLINUX; do
+          for dir in /usr/lib/syslinux /usr/share/syslinux /usr/lib/ISOLINUX /usr/lib/syslinux/modules/bios; do
             if [ -d "$dir" ] && [ -f "$dir/ldlinux.c32" ]; then
               SYSLINUX_DIR="$dir"
+              echo "Found syslinux directory: $SYSLINUX_DIR"
               break
             fi
           done
 
           if [ -z "$SYSLINUX_DIR" ]; then
+            # Try to find ldlinux.c32 directly
+            LDLINUX_PATH=$(find /usr -name "ldlinux.c32" 2>/dev/null | head -1)
+            if [ -n "$LDLINUX_PATH" ]; then
+              SYSLINUX_DIR=$(dirname "$LDLINUX_PATH")
+              echo "Found syslinux directory via ldlinux.c32: $SYSLINUX_DIR"
+            fi
+          fi
+
+          if [ -z "$SYSLINUX_DIR" ]; then
             echo "Error: syslinux directory with ldlinux.c32 not found"
+            echo "Listing syslinux-related packages:"
+            dpkg -L syslinux syslinux-common 2>/dev/null | grep -E "(ldlinux|isolinux)" | head -10
             exit 1
           fi
 
           # Copy all .c32 files from syslinux directory
           cp "$SYSLINUX_DIR"/*.c32 iso/isolinux/ 2>/dev/null || true
 
+          # Also try copying from modules/bios if it exists
+          if [ -d "$SYSLINUX_DIR/../modules/bios" ]; then
+            cp "$SYSLINUX_DIR/../modules/bios"/*.c32 iso/isolinux/ 2>/dev/null || true
+          fi
+
           # Verify critical files
           if [ ! -f "iso/isolinux/ldlinux.c32" ]; then
             echo "Error: ldlinux.c32 not found after copy"
+            echo "Files in isolinux directory:"
+            ls -la iso/isolinux/
             exit 1
           fi
 
