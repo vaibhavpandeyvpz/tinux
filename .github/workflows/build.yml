@@ -84,14 +84,14 @@ jobs:
           fi
 
           # Create ISO structure
-          mkdir -p iso/boot/efi/boot
+          mkdir -p iso/EFI/BOOT
           mkdir -p iso/boot
 
           cp "${KERNEL_PATH}" iso/boot/${KERNEL_IMAGE}
           cp build/initramfs.cpio.gz iso/boot/
 
-          # Use U-Boot as EFI application
-          cp u-boot-2025.10/u-boot-payload.efi iso/boot/efi/boot/bootx64.efi
+          # Use U-Boot as EFI application (EFI/BOOT/BOOTX64.EFI is the standard location)
+          cp u-boot-2025.10/u-boot-payload.efi iso/EFI/BOOT/BOOTX64.EFI
 
           # Create U-Boot script
           cat > iso/boot/boot.scr <<EOF
@@ -113,8 +113,10 @@ jobs:
           xorriso -as mkisofs \
             -R -J \
             -o "${ISO_NAME}" \
-            -e boot/efi/boot/bootx64.efi \
+            -e EFI/BOOT/BOOTX64.EFI \
             -no-emul-boot \
+            -boot-load-size 8192 \
+            -boot-info-table \
             -iso-level 3 \
             iso/
 
