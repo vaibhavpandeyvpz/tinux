@@ -58,10 +58,6 @@ jobs:
           # Use efi-x86_payload64_defconfig for x86_64 EFI support
           make efi-x86_payload64_defconfig
           make -j$(nproc)
-          # List built files to verify output
-          echo "U-Boot build output:"
-          ls -lh u-boot*.efi u-boot*.bin 2>/dev/null || find . -name "u-boot*.efi" -o -name "u-boot*.bin" | head -10
-          cd ..
 
       - name: Build Tinux (Kernel ${{ matrix.kernel }}, Busybox ${{ matrix.busybox }})
         env:
@@ -95,22 +91,7 @@ jobs:
           cp build/initramfs.cpio.gz iso/boot/
 
           # Use U-Boot as EFI application
-          # Find the U-Boot EFI binary (name may vary)
-          if [ -f "u-boot-2025.10/u-boot-x86-64.efi" ]; then
-            cp u-boot-2025.10/u-boot-x86-64.efi iso/boot/efi/boot/bootx64.efi
-          elif [ -f "u-boot-2025.10/u-boot.efi" ]; then
-            cp u-boot-2025.10/u-boot.efi iso/boot/efi/boot/bootx64.efi
-          else
-            # Try to find any .efi file
-            UBOOT_EFI=$(find u-boot-2025.10 -name "*.efi" | head -1)
-            if [ -n "$UBOOT_EFI" ]; then
-              cp "$UBOOT_EFI" iso/boot/efi/boot/bootx64.efi
-            else
-              echo "Error: U-Boot EFI binary not found"
-              find u-boot-2025.10 -type f -name "*efi*" -o -name "*EFI*" | head -10
-              exit 1
-            fi
-          fi
+          cp u-boot-2025.10/u-boot-payload.efi iso/boot/efi/boot/bootx64.efi
 
           # Create U-Boot script
           cat > iso/boot/boot.scr <<EOF
