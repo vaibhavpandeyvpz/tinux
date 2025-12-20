@@ -110,6 +110,8 @@ cd "$BUSYBOX_SOURCE"
 make O="$BUSYBOX_BUILD" defconfig
 cd "$BUSYBOX_BUILD"
 sed -i -e "s/.*CONFIG_STATIC.*/CONFIG_STATIC=y/" .config
+echo "Busybox config changed, rebuilding..."
+make oldconfig
 read -p "Would you like to customize busybox build config? (yN) " -n 1 -r
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     make menuconfig
