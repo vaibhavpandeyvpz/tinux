@@ -1,0 +1,93 @@
+name: Build Tinux ISOs
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        kernel: [6.18.2, 5.15.197]
+        busybox: [1.37.0]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            bison \
+            build-essential \
+            flex \
+            libelf-dev \
+            libncurses-dev \
+            libssl-dev \
+            xz-utils \
+            grub-pc-bin \
+            grub-common \
+            xorriso
+
+      - name: Build Tinux (Kernel ${{ matrix.kernel }}, Busybox ${{ matrix.busybox }})
+        run: |
+          # Run build.sh non-interactively by piping 'n' responses
+          echo -e "n\nn" | ./build.sh ${{ matrix.kernel }} ${{ matrix.busybox }}
+
+      - name: Create bootable ISO
+        run: |
+          ISO_NAME="tinux-kernel-${{ matrix.kernel }}-busybox-${{ matrix.busybox }}.iso"
+
+          mkdir -p iso/boot/grub
+          cp build/bzImage iso/boot/
+          cp build/initramfs.cpio.gz iso/boot/
+
+          # Create GRUB configuration
+          cat > iso/boot/grub/grub.cfg <<EOF
+          set timeout=5
+          set default=0
+
+          menuentry "Tinux (Kernel ${{ matrix.kernel }})" {
+            linux /boot/bzImage console=ttyS0
+            initrd /boot/initramfs.cpio.gz
+          }
+          EOF
+
+          # Create ISO using grub-mkrescue (supports both UEFI and BIOS)
+          grub-mkrescue -o "${ISO_NAME}" iso/ || {
+            echo "grub-mkrescue failed, trying alternative method with isolinux"
+            # Alternative: use isolinux for BIOS boot
+            mkdir -p iso/isolinux
+            cp /usr/lib/ISOLINUX/isolinux.bin iso/isolinux/ 2>/dev/null || \
+              cp /usr/lib/syslinux/isolinux.bin iso/isolinux/ 2>/dev/null || \
+              cp /usr/share/syslinux/isolinux.bin iso/isolinux/
+            cp /usr/lib/syslinux/modules/bios/ldlinux.c32 iso/isolinux/ 2>/dev/null || \
+              cp /usr/share/syslinux/ldlinux.c32 iso/isolinux/ 2>/dev/null || true
+            cat > iso/isolinux/isolinux.cfg <<EOF
+          DEFAULT linux
+          LABEL linux
+            KERNEL /boot/bzImage
+            APPEND initrd=/boot/initramfs.cpio.gz console=ttyS0
+          EOF
+            xorriso -as mkisofs \
+              -b isolinux/isolinux.bin \
+              -c isolinux/boot.cat \
+              -no-emul-boot \
+              -boot-load-size 4 \
+              -boot-info-table \
+              -o "${ISO_NAME}" \
+              iso/
+          }
+
+      - name: Upload ISO artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: tinux-kernel-${{ matrix.kernel }}-busybox-${{ matrix.busybox }}
+          path: tinux-kernel-${{ matrix.kernel }}-busybox-${{ matrix.busybox }}.iso
+          retention-days: 30
