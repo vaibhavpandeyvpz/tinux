@@ -30,6 +30,7 @@ jobs:
             libelf-dev \
             libncurses-dev \
             libssl-dev \
+            libgnutls28-dev \
             xz-utils \
             unzip \
             python3 \
@@ -40,14 +41,6 @@ jobs:
             dosfstools \
             e2fsprogs \
             bc
-
-      - name: Build Tinux (Kernel ${{ matrix.kernel }}, Busybox ${{ matrix.busybox }})
-        env:
-          ARCH: x86_64
-        run: |
-          # Run build.sh non-interactively by piping 'n' responses
-          export ARCH=x86_64
-          echo -e "n\nn" | env ARCH="$ARCH" ./build.sh ${{ matrix.kernel }} ${{ matrix.busybox }}
 
       - name: Build U-Boot
         run: |
@@ -66,6 +59,14 @@ jobs:
           make qemu-x86_64_defconfig
           make -j$(nproc)
           cd ..
+
+      - name: Build Tinux (Kernel ${{ matrix.kernel }}, Busybox ${{ matrix.busybox }})
+        env:
+          ARCH: x86_64
+        run: |
+          # Run build.sh non-interactively by piping 'n' responses
+          export ARCH=x86_64
+          echo -e "n\nn" | env ARCH="$ARCH" ./build.sh ${{ matrix.kernel }} ${{ matrix.busybox }}
 
       - name: Create bootable ISO
         run: |
