@@ -67,7 +67,7 @@ jobs:
 
           # Copy kernel and initramfs
           cp "${KERNEL_PATH}" iso/boot/vmlinuz64
-          cp build/initramfs.cpio.gz iso/boot/initrd.img
+          cp build/initramfs.cpio.gz iso/boot/initramfs.cpio.gz
 
           # Copy isolinux files
           cp /usr/lib/ISOLINUX/isolinux.bin iso/isolinux/
@@ -78,7 +78,8 @@ jobs:
           DEFAULT linux
           LABEL linux
             KERNEL /boot/vmlinuz64
-            APPEND initrd=/boot/initrd.img console=ttyS0 rdinit=/init
+            INITRD /boot/initramfs.cpio.gz
+            APPEND console=ttyS0 rdinit=/init
           EOF
 
           # Verify files are in place
@@ -86,7 +87,7 @@ jobs:
           ls -lh iso/boot/
           ls -lh iso/isolinux/
           file iso/boot/vmlinuz64
-          file iso/boot/initrd.img
+          file iso/boot/initramfs.cpio.gz
 
           # Create bootable ISO with isolinux
           xorriso -as mkisofs \
