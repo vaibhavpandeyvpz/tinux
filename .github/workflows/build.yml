@@ -69,68 +69,9 @@ jobs:
           cp "${KERNEL_PATH}" iso/boot/vmlinuz64
           cp build/initramfs.cpio.gz iso/boot/initrd.img
 
-          # Copy isolinux files (find in common locations)
-          ISOLINUX_BIN=""
-          for path in /usr/lib/ISOLINUX/isolinux.bin /usr/lib/syslinux/isolinux.bin /usr/share/syslinux/isolinux.bin; do
-            if [ -f "$path" ]; then
-              ISOLINUX_BIN="$path"
-              break
-            fi
-          done
-
-          if [ -z "$ISOLINUX_BIN" ]; then
-            echo "Error: isolinux.bin not found"
-            exit 1
-          fi
-
-          cp "$ISOLINUX_BIN" iso/isolinux/isolinux.bin
-
-          # Copy required syslinux files (ldlinux.c32 is critical)
-          # First, find where syslinux files are located
-          echo "Searching for syslinux files..."
-          find /usr -name "ldlinux.c32" 2>/dev/null | head -5
-          find /usr -name "isolinux.bin" 2>/dev/null | head -5
-
-          SYSLINUX_DIR=""
-          for dir in /usr/lib/syslinux /usr/share/syslinux /usr/lib/ISOLINUX /usr/lib/syslinux/modules/bios; do
-            if [ -d "$dir" ] && [ -f "$dir/ldlinux.c32" ]; then
-              SYSLINUX_DIR="$dir"
-              echo "Found syslinux directory: $SYSLINUX_DIR"
-              break
-            fi
-          done
-
-          if [ -z "$SYSLINUX_DIR" ]; then
-            # Try to find ldlinux.c32 directly
-            LDLINUX_PATH=$(find /usr -name "ldlinux.c32" 2>/dev/null | head -1)
-            if [ -n "$LDLINUX_PATH" ]; then
-              SYSLINUX_DIR=$(dirname "$LDLINUX_PATH")
-              echo "Found syslinux directory via ldlinux.c32: $SYSLINUX_DIR"
-            fi
-          fi
-
-          if [ -z "$SYSLINUX_DIR" ]; then
-            echo "Error: syslinux directory with ldlinux.c32 not found"
-            echo "Listing syslinux-related packages:"
-            dpkg -L syslinux syslinux-common 2>/dev/null | grep -E "(ldlinux|isolinux)" | head -10
-            exit 1
-          fi
-
-          # Copy all .c32 files from syslinux directory
-          cp "$SYSLINUX_DIR"/*.c32 iso/isolinux/ 2>/dev/null || true
-
-          # Also try copying from modules/bios if it exists
-          if [ -d "$SYSLINUX_DIR/../modules/bios" ]; then
-            cp "$SYSLINUX_DIR/../modules/bios"/*.c32 iso/isolinux/ 2>/dev/null || true
-          fi
-
-          # Verify critical files
-          if [ ! -f "iso/isolinux/ldlinux.c32" ]; then
-            echo "Error: ldlinux.c32 not found after copy"
-            echo "Files in isolinux directory:"
-            ls -la iso/isolinux/
-            exit 1
-          fi
+          # Copy isolinux files
+          cp /usr/lib/ISOLINUX/isolinux.bin iso/isolinux/
+          cp /usr/lib/syslinux/modules/bios/*.c32 iso/isolinux/
 
           # Create isolinux configuration
           cat > iso/isolinux/isolinux.cfg <<EOF
@@ -147,41 +88,18 @@ jobs:
           file iso/boot/vmlinuz64
           file iso/boot/initrd.img
 
-          # Find isohdpfx.bin for hybrid MBR
-          ISOHDPFX=""
-          for path in /usr/lib/syslinux/isohdpfx.bin /usr/share/syslinux/isohdpfx.bin; do
-            if [ -f "$path" ]; then
-              ISOHDPFX="$path"
-              break
-            fi
-          done
-
           # Create bootable ISO with isolinux
-          if [ -n "$ISOHDPFX" ]; then
-            xorriso -as mkisofs \
-              -l -r -J \
-              -V "TINUX" \
-              -b isolinux/isolinux.bin \
-              -isohybrid-mbr "$ISOHDPFX" \
-              -no-emul-boot \
-              -boot-load-size 4 \
-              -boot-info-table \
-              -c isolinux/boot.cat \
-              -o "${ISO_NAME}" \
-              iso/
-          else
-            # Fallback without hybrid MBR
-            xorriso -as mkisofs \
-              -l -r -J \
-              -V "TINUX" \
-              -b isolinux/isolinux.bin \
-              -no-emul-boot \
-              -boot-load-size 4 \
-              -boot-info-table \
-              -c isolinux/boot.cat \
-              -o "${ISO_NAME}" \
-              iso/
-          fi
+          xorriso -as mkisofs \
+            -l -r -J \
+            -V "TINUX" \
+            -b isolinux/isolinux.bin \
+            -isohybrid-mbr /usr/lib/syslinux/isohdpfx.bin \
+            -no-emul-boot \
+            -boot-load-size 4 \
+            -boot-info-table \
+            -c isolinux/boot.cat \
+            -o "${ISO_NAME}" \
+            iso/
 
       - name: Upload ISO artifact
         uses: actions/upload-artifact@v6
