@@ -70,12 +70,32 @@ mkdir -p "$KERNEL_BUILD"
 cd "$KERNEL_SOURCE"
 make O="$KERNEL_BUILD" defconfig
 cd "$KERNEL_BUILD"
+# Ensure initramfs/initrd support is enabled
+if ! grep -q "^CONFIG_BLK_DEV_INITRD=y" .config; then
+    sed -i 's/# CONFIG_BLK_DEV_INITRD is not set/CONFIG_BLK_DEV_INITRD=y/' .config 2>/dev/null || \
+        echo "CONFIG_BLK_DEV_INITRD=y" >> .config
+fi
+# Ensure gzip decompression support for compressed initramfs
+if ! grep -q "^CONFIG_RD_GZIP=y" .config; then
+    sed -i 's/# CONFIG_RD_GZIP is not set/CONFIG_RD_GZIP=y/' .config 2>/dev/null || \
+        echo "CONFIG_RD_GZIP=y" >> .config
+fi
 read -p "Would you like to customize kernel build config? (yN) " -n 1 -r
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     make menuconfig
 fi
 make -j$THREADS
-cp "$KERNEL_BUILD/arch/"*"/boot/bzImage" "$WD/build/"
+# Copy kernel image (name varies by architecture)
+if [ -f "$KERNEL_BUILD/arch/x86/boot/bzImage" ]; then
+    cp "$KERNEL_BUILD/arch/x86/boot/bzImage" "$WD/build/"
+elif [ -f "$KERNEL_BUILD/arch/arm64/boot/Image" ]; then
+    cp "$KERNEL_BUILD/arch/arm64/boot/Image" "$WD/build/"
+else
+    # Fallback: try to find any kernel image
+    cp "$KERNEL_BUILD/arch/"*"/boot/bzImage" "$WD/build/" 2>/dev/null || \
+    cp "$KERNEL_BUILD/arch/"*"/boot/Image" "$WD/build/" 2>/dev/null || \
+    abort "Could not find kernel image"
+fi
 
 echo Building busybox $BUSYBOX using $THREADS threads...
 mkdir -p "$BUSYBOX_BUILD"
