@@ -6,6 +6,8 @@ Using Tinux, you can build your very own, tiny ([Busybox](https://busybox.net/) 
 
 ![Screenshot](screenshot.png)
 
+For a full-fledged desktop grade distribution being built in open, see [https://github.com/vaibhavpandeyvpz/tejas](https://github.com/vaibhavpandeyvpz/tejas).
+
 ### Requirements
 
 Before starting to build, you will need to have dependencies installed on your build machine. Running below command will help you install it on most [Ubuntu](https://ubuntu.com/) based machines but you may easily adapt it to operating system of your choice if you now it well.
